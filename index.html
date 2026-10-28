@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Profix">
+  <title>PROFIX SOLUTION - Presupuestos de Reformas</title>
+  
+  <!-- Manifest Web PWA embebido -->
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlBST0ZJWCBTT0xVVElPTiIsCiAgInNob3J0X25hbWUiOiAiUHJvZml4IiwKICAic3RhcnRfdXJsIjogIi4vIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMjAyNjJCIiwKICAidGhlbWVfY29sb3IiOiAiI0YwQTQzQSIKZX0=">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel para ejecución directa -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Configuración Visual de Marca -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            graphite: '#20262B',
+            'graphite-light': '#2C343B',
+            amber: {
+              DEFAULT: '#F0A43A',
+              hover: '#D98F29',
+              light: '#FDF6EA'
+            },
+            steel: '#E4E7E8',
+            'steel-dark': '#C5C9CC'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .pt-safe { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      background-color: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    @media print {
+      body * { visibility: hidden; }
+      #pdf-print-area, #pdf-print-area * { visibility: visible; }
+      #pdf-print-area { position: absolute; left: 0; top: 0; width: 100%; color: #000; }
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-gray-900 text-graphite antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- CATÁLOGO BASE INICIAL (BARCELONA) ---
+    const INITIAL_CATALOG = [
+      { id: 'cat-1', code: 'ALB-01', trade: 'Albañilería', name: 'Demolición de tabique existente', unit: 'm²', materialCost: 0, laborCost: 14.50, defaultMargin: 25 },
+      { id: 'cat-2', code: 'ALB-02', trade: 'Albañilería', name: 'Construcción tabique ladrillo cerámico 7cm', unit: 'm²', materialCost: 8.20, laborCost: 22.00, defaultMargin: 25 },
+      { id: 'cat-3', code: 'ALB-03', trade: 'Albañilería', name: 'Alicatado de azulejos cerámicos (sin azulejo)', unit: 'm²', materialCost: 6.50, laborCost: 26.00, defaultMargin: 25 },
+      { id: 'cat-4', code: 'ALB-04', trade: 'Albañilería', name: 'Protección zonas comunes y ascensor', unit: 'ud', materialCost: 45.00, laborCost: 60.00, defaultMargin: 20 },
+      { id: 'cat-5', code: 'ALB-05', trade: 'Albañilería', name: 'Carga y retirada de escombros a vertedero autorizat', unit: 'm³', materialCost: 35.00, laborCost: 25.00, defaultMargin: 20 },
+      { id: 'cat-6', code: 'PIN-01', trade: 'Pintura', name: 'Pintado plástica mate en paredes (2 manos)', unit: 'm²', materialCost: 2.80, laborCost: 8.50, defaultMargin: 30 },
+      { id: 'cat-7', code: 'PIN-02', trade: 'Pintura', name: 'Reparación de grietas y alisado gotele', unit: 'm²', materialCost: 3.50, laborCost: 14.00, defaultMargin: 30 },
+      { id: 'cat-8', code: 'PIN-03', trade: 'Pintura', name: 'Esmaltado de puertas de paso y marcos', unit: 'ud', materialCost: 12.00, laborCost: 48.00, defaultMargin: 25 },
+      { id: 'cat-9', code: 'FON-01', trade: 'Fontanería', name: 'Punto de agua y desagüe multicapa', unit: 'ud', materialCost: 32.00, laborCost: 65.00, defaultMargin: 25 },
+      { id: 'cat-10', code: 'FON-02', trade: 'Fontanería', name: 'Montaje de mueble de baño y grifería', unit: 'ud', materialCost: 15.00, laborCost: 75.00, defaultMargin: 25 },
+      { id: 'cat-11', code: 'FON-03', trade: 'Fontanería', name: 'Instalación plato de ducha extraplano y mampara', unit: 'ud', materialCost: 45.00, laborCost: 120.00, defaultMargin: 25 },
+      { id: 'cat-12', code: 'ELE-01', trade: 'Electricidad', name: 'Punto de luz o enchufe empotrado', unit: 'ud', materialCost: 8.50, laborCost: 24.00, defaultMargin: 30 },
+      { id: 'cat-13', code: 'ELE-02', trade: 'Electricidad', name: 'Cuadro eléctrico según normativa (hasta 12 elem.)', unit: 'ud', materialCost: 185.00, laborCost: 190.00, defaultMargin: 25 },
+      { id: 'cat-14', code: 'PLA-01', trade: 'Pladur', name: 'Falso techo continuo de placa yeso laminado 13mm', unit: 'm²', materialCost: 11.20, laborCost: 18.00, defaultMargin: 25 },
+      { id: 'cat-15', code: 'PLA-02', trade: 'Pladur', name: 'Trasdosado autoportante con lana de roca', unit: 'm²', materialCost: 16.50, laborCost: 22.00, defaultMargin: 25 },
+      { id: 'cat-16', code: 'CAR-01', trade: 'Carpintería', name: 'Colocación de puerta bloc maciza lacada', unit: 'ud', materialCost: 160.00, laborCost: 65.00, defaultMargin: 20 },
+      { id: 'cat-17', code: 'CAR-02', trade: 'Carpintería', name: 'Instalación suelo laminado AC5 con rodapié', unit: 'm²', materialCost: 22.00, laborCost: 14.00, defaultMargin: 25 },
+      { id: 'cat-18', code: 'REP-01', trade: 'Reparaciones', name: 'Desplazamiento técnico y diagnóstico en Barcelona', unit: 'servicio', materialCost: 0, laborCost: 45.00, defaultMargin: 15 },
+      { id: 'cat-19', code: 'AUX-01', trade: 'Gastos Auxiliares', name: 'Alquiler de andamio o elevador por día', unit: 'jornada', materialCost: 55.00, laborCost: 20.00, defaultMargin: 15 }
+    ];
+
+    const INITIAL_CLIENTS = [
+      { id: 'cli-1', name: 'Marta Pujol Soler', phone: '622 34 56 78', email: 'marta.pujol@email.cat', address: 'Carrer de Mallorca 245, 3º 1ª, Barcelona', taxId: '47823910Z' },
+      { id: 'cli-2', name: 'Comunitat Verdi 14', phone: '934 12 88 00', email: 'info@verdi14.cat', address: 'Carrer de Verdi 14, Barcelona', taxId: 'H-65498712' }
+    ];
+
+    const INITIAL_PROJECTS = [
+      { id: 'proj-1', clientId: 'cli-1', title: 'Reforma integral baño principal', address: 'Carrer de Mallorca 245, 3º 1ª', workType: 'Baños', visitDate: '2026-10-12', status: 'en_curso' },
+      { id: 'proj-2', clientId: 'cli-2', title: 'Reparación humedades vestíbulo', address: 'Carrer de Verdi 14', workType: 'Pintura', visitDate: '2026-10-18', status: 'en_curso' }
+    ];
+
+    const INITIAL_QUOTES = [
+      {
+        id: 'q-1001',
+        quoteNumber: 'PS-2026-0001',
+        version: 1,
+        clientId: 'cli-1',
+        projectId: 'proj-1',
+        issueDate: '2026-10-15',
+        validityDays: 30,
+        status: 'aceptado',
+        paymentTerms: '40% al inicio, 40% a mitad de obra, 20% al finalizar',
+        generalExpensesPct: 10,
+        marginType: 'markup',
+        taxRate: 21,
+        globalDiscountPct: 0,
+        items: [
+          { id: 'qi-1', code: 'ALB-04', description: 'Protección zonas comunes y ascensor', unit: 'ud', quantity: 1, unitMaterialCost: 45.00, unitLaborCost: 60.00, otherDirectCosts: 0, wastePct: 0, marginPct: 20, unitSalePrice: 126.00, lineTotal: 126.00 },
+          { id: 'qi-2', code: 'ALB-01', description: 'Demolición de tabique y azulejos en baño', unit: 'm²', quantity: 18, unitMaterialCost: 0, unitLaborCost: 14.50, otherDirectCosts: 0, wastePct: 0, marginPct: 25, unitSalePrice: 18.13, lineTotal: 326.34 },
+          { id: 'qi-3', code: 'FON-03', description: 'Instalación plato de ducha extraplano y mampara', unit: 'ud', quantity: 1, unitMaterialCost: 220.00, unitLaborCost: 120.00, otherDirectCosts: 0, wastePct: 5, marginPct: 25, unitSalePrice: 463.38, lineTotal: 463.38 }
+        ]
+      }
+    ];
+
+    const INITIAL_SETTINGS = {
+      companyName: 'PROFIX SOLUTION',
+      ownerName: 'Manel García Noguera',
+      taxId: '46382910M',
+      address: 'Carrer de Lepant 312, Baixos, 08025 Barcelona',
+      phone: '633 11 22 33',
+      email: 'info@profixsolution.es',
+      iban: 'ES91 2100 0418 4502 0001 2345',
+      defaultValidity: 30,
+      defaultGeneralExpenses: 10,
+      defaultTaxRate: 21,
+      defaultPaymentTerms: '30% al inicio, 50% en fase intermedia, 20% al finalizar'
+    };
+
+    const formatCurrency = (val) => {
+      const num = Number(val) || 0;
+      return num.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    };
+
+    // --- APLICACIÓN PRINCIPAL ---
+    function App() {
+      const [activeTab, setActiveTab] = useState('inicio');
+      const [clients, setClients] = useState(() => JSON.parse(localStorage.getItem('ps_clients')) || INITIAL_CLIENTS);
+      const [projects, setProjects] = useState(() => JSON.parse(localStorage.getItem('ps_projects')) || INITIAL_PROJECTS);
+      const [quotes, setQuotes] = useState(() => JSON.parse(localStorage.getItem('ps_quotes')) || INITIAL_QUOTES);
+      const [catalog, setCatalog] = useState(() => JSON.parse(localStorage.getItem('ps_catalog')) || INITIAL_CATALOG);
+      const [actualCosts, setActualCosts] = useState(() => JSON.parse(localStorage.getItem('ps_costs')) || []);
+      const [settings, setSettings] = useState(() => JSON.parse(localStorage.getItem('ps_settings')) || INITIAL_SETTINGS);
+
+      const [showWizard, setShowWizard] = useState(false);
+      const [viewQuotePdf, setViewQuotePdf] = useState(null);
+      const [showClientModal, setShowClientModal] = useState(false);
+      const [showCostModal, setShowCostModal] = useState(false);
+      const [selectedProjectIdForCost, setSelectedProjectIdForCost] = useState('');
+
+      useEffect(() => { localStorage.setItem('ps_clients', JSON.stringify(clients)); }, [clients]);
+      useEffect(() => { localStorage.setItem('ps_projects', JSON.stringify(projects)); }, [projects]);
+      useEffect(() => { localStorage.setItem('ps_quotes', JSON.stringify(quotes)); }, [quotes]);
+      useEffect(() => { localStorage.setItem('ps_catalog', JSON.stringify(catalog)); }, [catalog]);
+      useEffect(() => { localStorage.setItem('ps_costs', JSON.stringify(actualCosts)); }, [actualCosts]);
+      useEffect(() => { localStorage.setItem('ps_settings', JSON.stringify(settings)); }, [settings]);
+
+      useEffect(() => {
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      const metrics = useMemo(() => {
+        const totalCount = quotes.length;
+        const pendingCount = quotes.filter(q => q.status === 'enviado' || q.status === 'borrador').length;
+        const accepted = quotes.filter(q => q.status === 'aceptado');
+        
+        const calcTotal = (q) => {
+          const sub = q.items.reduce((s, i) => s + (i.lineTotal || 0), 0);
+          const base = sub * (1 - (q.globalDiscountPct||0)/100);
+          return base * (1 + (q.taxRate||21)/100);
+        };
+
+        return {
+          totalCount,
+          pendingCount,
+          acceptedCount: accepted.length,
+          totalBudgeted: quotes.reduce((acc, q) => acc + calcTotal(q), 0),
+          totalAccepted: accepted.reduce((acc, q) => acc + calcTotal(q), 0)
+        };
+      }, [quotes]);
+
+      return (
+        <div className="flex flex-col min-h-screen max-w-md mx-auto bg-gray-100 shadow-2xl relative pb-20 pt-safe">
+          {/* Header Superior */}
+          <header className="bg-graphite text-white p-4 sticky top-0 z-30 shadow-md border-b-2 border-amber">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <div className="bg-amber p-1.5 rounded text-graphite font-black">
+                  <i data-lucide="wrench" className="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h1 className="font-bold text-lg leading-none text-white">PROFIX <span className="text-amber">SOLUTION</span></h1>
+                  <p className="text-[10px] text-gray-400 font-medium">BARCELONA • PRESUPUESTOS Y OBRAS</p>
+                </div>
+              </div>
+              <button onClick={() => setActiveTab('config')} className="text-gray-300 hover:text-amber p-1">
+                <i data-lucide="settings" className="w-6 h-6"></i>
+              </button>
+            </div>
+          </header>
+
+          {/* Cuerpo según pestaña */}
+          <main className="flex-1 p-4 overflow-y-auto">
+            {activeTab === 'inicio' && (
+              <div className="space-y-4">
+                <div className="bg-graphite text-white p-5 rounded-2xl shadow-xl border-l-4 border-amber relative">
+                  <p className="text-xs text-amber font-bold uppercase tracking-wider">Volumen Total Presupuestado</p>
+                  <h2 className="text-3xl font-extrabold mt-1">{formatCurrency(metrics.totalBudgeted)}</h2>
+                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-700">
+                    <div>
+                      <p className="text-[11px] text-gray-400">Aceptado</p>
+                      <p className="text-lg font-bold text-green-400">{formatCurrency(metrics.totalAccepted)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400">Pendientes</p>
+                      <p className="text-lg font-bold text-amber">{metrics.pendingCount} ofertas</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowWizard(true)}
+                  className="w-full bg-amber hover:bg-amber-hover text-graphite font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 text-sm uppercase tracking-wider active:scale-95 transition"
+                >
+                  <i data-lucide="plus-circle" className="w-5 h-5"></i>
+                  <span>Crear Presupuesto en Obra</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-xs uppercase text-graphite tracking-wide">Presupuestos Recientes</h3>
+                    <button onClick={() => setActiveTab('presupuestos')} className="text-xs text-amber font-semibold">Ver todos</button>
+                  </div>
+                  <div className="space-y-2">
+                    {quotes.slice(0, 3).map(q => {
+                      const client = clients.find(c => c.id === q.clientId);
+                      const total = q.items.reduce((s, i) => s + (i.lineTotal || 0), 0) * (1 + (q.taxRate||21)/100);
+                      return (
+                        <div key={q.id} className="p-3 bg-steel rounded-xl flex justify-between items-center border">
+                          <div>
+                            <span className="font-bold text-xs text-graphite">{q.quoteNumber}</span>
+                            <p className="text-xs font-semibold text-gray-800">{client?.name || 'Cliente'}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-extrabold text-sm text-graphite">{formatCurrency(total)}</p>
+                            <button onClick={() => setViewQuotePdf(q)} className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-300 font-bold mt-1">PDF</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'presupuestos' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-base font-bold uppercase text-graphite">Presupuestos ({quotes.length})</h2>
+                  <button onClick={() => setShowWizard(true)} className="bg-amber text-graphite font-bold px-3 py-1.5 rounded-lg text-xs">+ Nuevo</button>
+                </div>
+                <div className="space-y-3">
+                  {quotes.map(q => {
+                    const client = clients.find(c => c.id === q.clientId);
+                    const total = q.items.reduce((s, i) => s + (i.lineTotal || 0), 0) * (1 + (q.taxRate||21)/100);
+                    return (
+                      <div key={q.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-extrabold text-sm">{q.quoteNumber}</span>
+                            <p className="text-xs font-bold text-gray-700">{client?.name}</p>
+                          </div>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-light text-amber border">{q.status}</span>
+                        </div>
+                        <div className="flex justify-between items-end border-t pt-2">
+                          <p className="text-[10px] text-gray-400">Emisión: {q.issueDate}</p>
+                          <div className="text-right">
+                            <p className="text-base font-extrabold">{formatCurrency(total)}</p>
+                            <button onClick={() => setViewQuotePdf(q)} className="bg-graphite text-amber font-bold px-3 py-1 rounded text-xs mt-1">Ver PDF</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'clientes' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-base font-bold uppercase text-graphite">Clientes ({clients.length})</h2>
+                  <button onClick={() => setShowClientModal(true)} className="bg-amber text-graphite font-bold px-3 py-1.5 rounded-lg text-xs">+ Cliente</button>
+                </div>
+                <div className="space-y-3">
+                  {clients.map(cli => (
+                    <div key={cli.id} className="bg-white rounded-xl p-4 shadow-sm border space-y-1">
+                      <h3 className="font-bold text-sm text-graphite">{cli.name}</h3>
+                      <p className="text-xs text-gray-600"><i data-lucide="map-pin" className="w-3 h-3 inline text-amber"></i> {cli.address}</p>
+                      <p className="text-xs text-gray-600"><i data-lucide="phone" className="w-3 h-3 inline text-gray-400"></i> {cli.phone}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'catalogo' && (
+              <div className="space-y-3">
+                <h2 className="text-base font-bold uppercase text-graphite">Catálogo de Precios Base ({catalog.length})</h2>
+                <div className="space-y-2">
+                  {catalog.map(item => (
+                    <div key={item.id} className="bg-white p-3 rounded-xl border text-xs space-y-1">
+                      <div className="flex justify-between font-mono text-[10px] text-gray-400">
+                        <span>{item.code}</span>
+                        <span className="text-amber font-bold">{item.trade}</span>
+                      </div>
+                      <p className="font-bold text-graphite">{item.name}</p>
+                      <div className="flex justify-between text-gray-500 pt-1 border-t">
+                        <span>Ud: {item.unit}</span>
+                        <span className="font-bold text-graphite">Venta Est: {formatCurrency((item.materialCost + item.laborCost) * (1 + item.defaultMargin/100))}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'rentabilidad' && (
+              <div className="space-y-4">
+                <h2 className="text-base font-bold uppercase text-graphite">Control Obra & Beneficio</h2>
+                {projects.map(p => {
+                  const q = quotes.find(quote => quote.projectId === p.id && quote.status === 'aceptado');
+                  const pCosts = actualCosts.filter(c => c.projectId === p.id);
+                  const totalCost = pCosts.reduce((s, c) => s + Number(c.amount), 0);
+                  const expected = q ? q.items.reduce((s, i) => s + i.lineTotal, 0) : 0;
+
+                  return (
+                    <div key={p.id} className="bg-white p-4 rounded-xl border space-y-2">
+                      <div className="flex justify-between">
+                        <h3 className="font-bold text-sm">{p.title}</h3>
+                        <button onClick={() => { setSelectedProjectIdForCost(p.id); setShowCostModal(true); }} className="bg-amber font-bold text-xs px-2 py-1 rounded">+ Gasto</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-2">
+                        <div className="bg-gray-50 p-2 rounded">
+                          <p className="text-[10px] text-gray-400">Presupuestado</p>
+                          <p className="font-bold">{formatCurrency(expected)}</p>
+                        </div>
+                        <div className="bg-steel p-2 rounded">
+                          <p className="text-[10px] text-graphite">Gasto Real</p>
+                          <p className="font-bold text-red-600">{formatCurrency(totalCost)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeTab === 'config' && (
+              <form onSubmit={(e) => { e.preventDefault(); alert('Configuración guardada en iPhone'); }} className="bg-white p-4 rounded-xl border space-y-3 text-xs">
+                <h2 className="font-bold text-sm uppercase text-graphite border-b pb-2">Datos Comerciales</h2>
+                <div>
+                  <label className="block text-gray-500 mb-1">Nombre Comercial</label>
+                  <input type="text" value={settings.companyName} onChange={e => setSettings({...settings, companyName: e.target.value})} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1">Titular NIF</label>
+                  <input type="text" value={settings.taxId} onChange={e => setSettings({...settings, taxId: e.target.value})} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1">Teléfono</label>
+                  <input type="text" value={settings.phone} onChange={e => setSettings({...settings, phone: e.target.value})} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1">IBAN de Cobro</label>
+                  <input type="text" value={settings.iban} onChange={e => setSettings({...settings, iban: e.target.value})} className="w-full border p-2 rounded font-mono" />
+                </div>
+                <button type="submit" className="w-full bg-graphite text-amber font-bold py-2.5 rounded-lg mt-2">GUARDAR DATOS</button>
+              </form>
+            )}
+          </main>
+
+          {/* Navegación Fija Inferior */}
+          <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-graphite text-white flex justify-around items-center p-2 z-40 border-t border-gray-800 pb-safe">
+            <button onClick={() => setActiveTab('inicio')} className={`flex flex-col items-center text-[10px] ${activeTab === 'inicio' ? 'text-amber font-bold' : 'text-gray-400'}`}>
+              <i data-lucide="layout-dashboard" className="w-5 h-5"></i><span>Inicio</span>
+            </button>
+            <button onClick={() => setActiveTab('presupuestos')} className={`flex flex-col items-center text-[10px] ${activeTab === 'presupuestos' ? 'text-amber font-bold' : 'text-gray-400'}`}>
+              <i data-lucide="file-text" className="w-5 h-5"></i><span>Ofertas</span>
+            </button>
+            <button onClick={() => setShowWizard(true)} className="flex flex-col items-center -mt-5 bg-amber text-graphite rounded-full p-3 shadow-lg border-4 border-gray-100">
+              <i data-lucide="plus" className="w-6 h-6 stroke-[3]"></i>
+            </button>
+            <button onClick={() => setActiveTab('clientes')} className={`flex flex-col items-center text-[10px] ${activeTab === 'clientes' ? 'text-amber font-bold' : 'text-gray-400'}`}>
+              <i data-lucide="users" className="w-5 h-5"></i><span>Clientes</span>
+            </button>
+            <button onClick={() => setActiveTab('rentabilidad')} className={`flex flex-col items-center text-[10px] ${activeTab === 'rentabilidad' ? 'text-amber font-bold' : 'text-gray-400'}`}>
+              <i data-lucide="trending-up" className="w-5 h-5"></i><span>Control</span>
+            </button>
+          </nav>
+
+          {/* Modales de Interacción */}
+          {showWizard && (
+            <QuoteWizardModal 
+              clients={clients} 
+              projects={projects} 
+              catalog={catalog} 
+              settings={settings}
+              onClose={() => setShowWizard(false)}
+              onSave={(newQ) => { setQuotes([newQ, ...quotes]); setShowWizard(false); setViewQuotePdf(newQ); }}
+            />
+          )}
+
+          {viewQuotePdf && (
+            <PdfPreviewModal 
+              quote={viewQuotePdf} 
+              client={clients.find(c => c.id === viewQuotePdf.clientId)} 
+              settings={settings}
+              onClose={() => setViewQuotePdf(null)}
+            />
+          )}
+
+          {showClientModal && (
+            <AddClientModal onClose={() => setShowClientModal(false)} onSave={(c) => { setClients([...clients, c]); setShowClientModal(false); }} />
+          )}
+
+          {showCostModal && (
+            <AddCostModal projectId={selectedProjectIdForCost} onClose={() => setShowCostModal(false)} onSave={(cost) => { setActualCosts([...actualCosts, cost]); setShowCostModal(false); }} />
+          )}
+        </div>
+      );
+    }
+
+    // --- SUB-MODAL: ASISTENTE DE PRESUPUESTOS ---
+    function QuoteWizardModal({ clients, projects, catalog, settings, onClose, onSave }) {
+      const [step, setStep] = useState(1);
+      const [clientId, setClientId] = useState(clients[0]?.id || '');
+      const [projectId, setProjectId] = useState(projects[0]?.id || '');
+      const [items, setItems] = useState([]);
+
+      const addItem = (catItem) => {
+        const cost = catItem.materialCost + catItem.laborCost;
+        const total = cost * (1 + catItem.defaultMargin/100);
+        setItems([...items, { ...catItem, id: 'qi-' + Date.now(), quantity: 1, unitSalePrice: total, lineTotal: total }]);
+      };
+
+      const finish = () => {
+        onSave({
+          id: 'q-' + Date.now(),
+          quoteNumber: `PS-2026-${String(Math.floor(Math.random()*9000)+1000)}`,
+          version: 1,
+          clientId,
+          projectId,
+          issueDate: new Date().toISOString().split('T')[0],
+          validityDays: 30,
+          status: 'borrador',
+          taxRate: 21,
+          items
+        });
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end max-w-md mx-auto">
+          <div className="bg-white rounded-t-3xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="bg-graphite text-white p-3 flex justify-between items-center border-b-2 border-amber">
+              <h3 className="font-bold text-xs uppercase text-amber">Nuevo Presupuesto (Paso {step}/3)</h3>
+              <button onClick={onClose}><i data-lucide="x" className="w-5 h-5"></i></button>
+            </div>
+            <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+              {step === 1 && (
+                <div className="space-y-3">
+                  <label className="block font-bold">Seleccionar Cliente</label>
+                  <select value={clientId} onChange={e => setClientId(e.target.value)} className="w-full border p-2 rounded">
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {step === 2 && (
+                <div className="space-y-2">
+                  <label className="block font-bold">Añadir Partidas del Catálogo</label>
+                  <div className="space-y-1 max-h-60 overflow-y-auto border p-2 rounded">
+                    {catalog.map(cat => (
+                      <div key={cat.id} className="flex justify-between items-center p-2 border-b">
+                        <span>{cat.name}</span>
+                        <button onClick={() => addItem(cat)} className="bg-amber font-bold px-2 py-0.5 rounded text-[10px]">+ Añadir</button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="font-bold pt-2">Añadidas: {items.length}</p>
+                </div>
+              )}
+              {step === 3 && (
+                <div className="space-y-2">
+                  <h4 className="font-bold">Resumen de Oferta</h4>
+                  <p>Partidas totales: {items.length}</p>
+                  <p className="font-extrabold text-sm">Total: {formatCurrency(items.reduce((s,i) => s + i.lineTotal, 0) * 1.21)}</p>
+                </div>
+              )}
+            </div>
+            <div className="p-3 bg-gray-100 flex justify-between">
+              {step > 1 && <button onClick={() => setStep(step - 1)} className="bg-gray-300 font-bold px-3 py-1 rounded">Atrás</button>}
+              {step < 3 ? (
+                <button onClick={() => setStep(step + 1)} className="bg-amber font-bold px-4 py-1 rounded ml-auto">Siguiente</button>
+              ) : (
+                <button onClick={finish} className="bg-green-600 text-white font-bold px-4 py-1 rounded ml-auto">Guardar y PDF</button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- SUB-MODAL: VISTA PDF ---
+    function PdfPreviewModal({ quote, client, settings, onClose }) {
+      const itemsSub = quote.items.reduce((s, i) => s + (i.lineTotal || 0), 0);
+      const grandTotal = itemsSub * 1.21;
+
+      return (
+        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end max-w-md mx-auto">
+          <div className="bg-white rounded-t-3xl h-[92vh] flex flex-col overflow-hidden">
+            <div className="bg-graphite text-white p-3 flex justify-between items-center border-b border-amber">
+              <span className="font-bold text-xs text-amber uppercase">PDF PROFIX SOLUTION</span>
+              <button onClick={() => window.print()} className="bg-amber text-graphite font-bold px-3 py-1 rounded text-xs">Imprimir / Guardar PDF</button>
+              <button onClick={onClose}><i data-lucide="x" className="w-5 h-5"></i></button>
+            </div>
+            <div className="flex-1 p-6 overflow-y-auto text-[11px] leading-relaxed" id="pdf-print-area">
+              <div className="flex justify-between border-b-2 border-graphite pb-3 mb-3">
+                <div>
+                  <h1 className="text-lg font-extrabold">PROFIX <span className="text-amber">SOLUTION</span></h1>
+                  <p>{settings.ownerName}</p>
+                  <p className="text-gray-500">{settings.phone}</p>
+                </div>
+                <div className="text-right">
+                  <span className="bg-graphite text-amber px-2 py-0.5 rounded font-bold text-[10px]">PRESUPUESTO</span>
+                  <p className="font-mono font-bold">{quote.quoteNumber}</p>
+                  <p className="text-gray-500">{quote.issueDate}</p>
+                </div>
+              </div>
+              <div className="bg-steel p-2 rounded mb-3">
+                <p className="font-bold">Cliente: {client?.name || 'Cliente general'}</p>
+                <p>{client?.address}</p>
+              </div>
+              <table className="w-full text-left mb-4">
+                <thead>
+                  <tr className="bg-graphite text-white text-[9px]">
+                    <th className="p-1">Descripción</th>
+                    <th className="p-1 text-center">Cant.</th>
+                    <th className="p-1 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-[10px]">
+                  {quote.items.map((it, idx) => (
+                    <tr key={idx}>
+                      <td className="p-1">{it.description}</td>
+                      <td className="p-1 text-center">{it.quantity}</td>
+                      <td className="p-1 text-right font-bold">{formatCurrency(it.lineTotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="text-right border-t pt-2 space-y-1">
+                <p>Base Imponible: {formatCurrency(itemsSub)}</p>
+                <p>IVA (21%): {formatCurrency(itemsSub * 0.21)}</p>
+                <p className="text-sm font-extrabold text-graphite">Total: {formatCurrency(grandTotal)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddClientModal({ onClose, onSave }) {
+      const [name, setName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [address, setAddress] = useState('');
+      return (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 max-w-md mx-auto">
+          <form onSubmit={(e) => { e.preventDefault(); onSave({ id: 'cli-' + Date.now(), name, phone, address }); }} className="bg-white w-full rounded-2xl p-4 space-y-2 text-xs">
+            <h3 className="font-bold border-b pb-1">Nuevo Cliente</h3>
+            <input type="text" placeholder="Nombre completo" value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded" required />
+            <input type="text" placeholder="Teléfono" value={phone} onChange={e => setPhone(e.target.value)} className="w-full border p-2 rounded" required />
+            <input type="text" placeholder="Dirección obra" value={address} onChange={e => setAddress(e.target.value)} className="w-full border p-2 rounded" required />
+            <div className="flex justify-end space-x-2 pt-2">
+              <button type="button" onClick={onClose} className="px-3 py-1 bg-gray-200 rounded font-bold">Cancelar</button>
+              <button type="submit" className="px-3 py-1 bg-amber rounded font-bold">Guardar</button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    function AddCostModal({ projectId, onClose, onSave }) {
+      const [concept, setConcept] = useState('');
+      const [amount, setAmount] = useState('');
+      return (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 max-w-md mx-auto">
+          <form onSubmit={(e) => { e.preventDefault(); onSave({ id: 'ac-' + Date.now(), projectId, concept, amount: Number(amount) }); }} className="bg-white w-full rounded-2xl p-4 space-y-2 text-xs">
+            <h3 className="font-bold border-b pb-1">Imputar Gasto Real</h3>
+            <input type="text" placeholder="Concepto (ej. Azulejos)" value={concept} onChange={e => setConcept(e.target.value)} className="w-full border p-2 rounded" required />
+            <input type="number" placeholder="Importe (€)" value={amount} onChange={e => setAmount(e.target.value)} className="w-full border p-2 rounded" required step="0.01" />
+            <div className="flex justify-end space-x-2 pt-2">
+              <button type="button" onClick={onClose} className="px-3 py-1 bg-gray-200 rounded font-bold">Cancelar</button>
+              <button type="submit" className="px-3 py-1 bg-amber rounded font-bold">Guardar</button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
